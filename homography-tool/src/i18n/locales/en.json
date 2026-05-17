@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "PadelTools",
+    "subtitle": "Manual homography calibration"
+  },
+  "steps": {
+    "load": "Load video",
+    "pickFrame": "Pick frame",
+    "annotate": "Annotate points",
+    "validate": "Validate"
+  },
+  "videoLoader": {
+    "dragPrompt": "Drag your video here",
+    "clickPrompt": "or click to select",
+    "formats": "MP4 · MOV · WebM · MKV"
+  },
+  "framePicker": {
+    "hint": "Find a moment where the court lines are clear (no players blocking them).",
+    "back": "← Back",
+    "capture": "Capture this frame →"
+  },
+  "annotationTool": {
+    "marking": "Marking:",
+    "markedCount": "({{done}}/{{total}} marked)",
+    "outOfFrameMode": "· out of frame",
+    "allMarked": "✓ All points marked ({{done}}/{{total}})",
+    "reprojError": "Reprojection error:",
+    "outOfFrameBtn": "⤢ Out of frame",
+    "outOfFrameTip": "The point is outside the frame — define the corner by tracing two visible lines",
+    "cancel": "✕ Cancel",
+    "undo": "↩ Undo",
+    "validate": "Validate →",
+    "hint": "Click to place · Drag an existing point to move it · Min. 4 points to compute H",
+    "hintOutOfFrame": "Corner outside frame: activate",
+    "back": "← Change frame"
+  },
+  "annotationCanvas": {
+    "phase0": "Click on the first visible line (e.g. the side line)",
+    "phase1": "Click on another point of the same line",
+    "phase2": "First line set · Click on the second visible line (e.g. the baseline)",
+    "phase3": "Click on a second point of that line to compute the corner",
+    "parallelWarning": "⚠ Nearly parallel lines — the corner may be imprecise"
+  },
+  "courtDiagram": {
+    "title": "Top-down court view",
+    "imaginary": "✦ imaginary"
+  },
+  "validationView": {
+    "overlayHint": "Green lines are the court projection from H. They should align with the real court lines in the video.",
+    "reprojLabel": "Reprojection error",
+    "qualityExcellent": "{{cm}} cm — Excellent ✓",
+    "qualityAcceptable": "{{cm}} cm — Acceptable ⚠",
+    "qualityPoor": "{{cm}} cm — Review ✗",
+    "feedbackExcellent": "Calibration suitable for zone and speed analysis.",
+    "feedbackAcceptable": "Acceptable. Consider adjusting some points.",
+    "feedbackPoor": "High error. Go back and mark the points more precisely.",
+    "pointsUsed": "Points used",
+    "matrixLabel": "H matrix (3×3)",
+    "exportDone": "✓ Exported",
+    "export": "↓ Export JSON",
+    "back": "← Back to adjust points"
+  },
+  "courtKeypoints": {
+    "A": "Back-left corner",
+    "B": "Back-right corner",
+    "C": "Front-left corner",
+    "D": "Front-right corner",
+    "E": "Net — left post",
+    "F": "Net — right post",
+    "G": "Service line (near, centre)",
+    "H": "Service line (far, centre)"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "PadelTools",
+    "subtitle": "Calibración manual de homografía"
+  },
+  "steps": {
+    "load": "Cargar vídeo",
+    "pickFrame": "Elegir frame",
+    "annotate": "Anotar puntos",
+    "validate": "Validar"
+  },
+  "videoLoader": {
+    "dragPrompt": "Arrastra tu vídeo aquí",
+    "clickPrompt": "o haz clic para seleccionar",
+    "formats": "MP4 · MOV · WebM · MKV"
+  },
+  "framePicker": {
+    "hint": "Busca un momento donde las líneas de la pista estén despejadas (sin jugadores tapándolas).",
+    "back": "← Volver",
+    "capture": "Capturar este frame →"
+  },
+  "annotationTool": {
+    "marking": "Marcando:",
+    "markedCount": "({{done}}/{{total}} marcados)",
+    "outOfFrameMode": "· fuera de frame",
+    "allMarked": "✓ Todos los puntos marcados ({{done}}/{{total}})",
+    "reprojError": "Error reproyección:",
+    "outOfFrameBtn": "⤢ Fuera de frame",
+    "outOfFrameTip": "El punto está fuera del encuadre — define la esquina trazando dos líneas visibles",
+    "cancel": "✕ Cancelar",
+    "undo": "↩ Deshacer",
+    "validate": "Validar →",
+    "hint": "Clic para colocar · Arrastra un punto para moverlo · Min. 4 puntos para calcular H",
+    "hintOutOfFrame": "Esquina fuera del encuadre: activa",
+    "back": "← Cambiar frame"
+  },
+  "annotationCanvas": {
+    "phase0": "Haz clic sobre la primera línea visible (p.ej. el lateral de la pista)",
+    "phase1": "Haz clic en otro punto de la misma línea",
+    "phase2": "Primera línea fijada · Haz clic sobre la segunda línea visible (p.ej. el fondo)",
+    "phase3": "Haz clic en un segundo punto de esa línea para calcular la esquina",
+    "parallelWarning": "⚠ Líneas casi paralelas — la esquina puede ser imprecisa"
+  },
+  "courtDiagram": {
+    "title": "Vista cenital de la pista",
+    "imaginary": "✦ imaginaria"
+  },
+  "validationView": {
+    "overlayHint": "Las líneas verdes son la proyección de la pista según H. Deben coincidir con las líneas reales del vídeo.",
+    "reprojLabel": "Error de reproyección",
+    "qualityExcellent": "{{cm}} cm — Excelente ✓",
+    "qualityAcceptable": "{{cm}} cm — Aceptable ⚠",
+    "qualityPoor": "{{cm}} cm — Revisar ✗",
+    "feedbackExcellent": "Calibración apta para análisis de zona y velocidad.",
+    "feedbackAcceptable": "Aceptable. Considera ajustar algunos puntos.",
+    "feedbackPoor": "Error alto. Vuelve a marcar los puntos con más precisión.",
+    "pointsUsed": "Puntos usados",
+    "matrixLabel": "Matriz H (3×3)",
+    "exportDone": "✓ Exportado",
+    "export": "↓ Exportar JSON",
+    "back": "← Volver a ajustar puntos"
+  },
+  "courtKeypoints": {
+    "A": "Esquina trasera izquierda",
+    "B": "Esquina trasera derecha",
+    "C": "Esquina delantera izquierda",
+    "D": "Esquina delantera derecha",
+    "E": "Red — poste izquierdo",
+    "F": "Red — poste derecho",
+    "G": "Línea de saque (cerca, centro)",
+    "H": "Línea de saque (lejos, centro)"
+  }
+}

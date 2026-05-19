@@ -7,10 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "mkdir -p public && cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm public/"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
+    "onnxruntime-web": "^1.26.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "tailwindcss": "^4.3.0"

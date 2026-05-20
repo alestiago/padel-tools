@@ -33,10 +33,10 @@ export default function ImpactSelector({ value, onChange }: Props) {
         Impact
         <span className="ml-1.5 text-slate-600 normal-case font-normal">(I to cycle)</span>
       </p>
-      <div className="flex flex-col gap-1">
+      <div className="grid grid-cols-2 gap-1">
         <button
           onClick={() => onChange(null)}
-          className={`w-full text-left px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+          className={`col-span-2 px-2 py-1.5 rounded text-sm font-medium transition-colors ${
             value === null
               ? 'bg-slate-500 text-white'
               : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
@@ -48,7 +48,7 @@ export default function ImpactSelector({ value, onChange }: Props) {
           <button
             key={surface}
             onClick={() => handleClick(surface)}
-            className={`w-full text-left px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+            className={`px-2 py-1.5 rounded text-sm font-medium transition-colors ${
               value === surface
                 ? SURFACE_STYLES[surface]
                 : 'bg-slate-700 text-slate-300 hover:bg-slate-600'

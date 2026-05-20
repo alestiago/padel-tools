@@ -101,6 +101,20 @@ export const SHOT_TYPE_COLORS: Record<ShotType, string> = {
 export type Hand = 'forehand' | 'backhand'
 export const HANDS: Hand[] = ['forehand', 'backhand']
 
+export type ShotForcing = 'forced' | 'unforced'
+export const SHOT_FORCINGS: ShotForcing[] = ['forced', 'unforced']
+
+export interface ShotConstraints {
+  hand?: Hand
+  forcing?: ShotForcing
+}
+
+// Fields locked automatically when a shot type is selected.
+export const SHOT_TYPE_CONSTRAINTS: Partial<Record<ShotType, ShotConstraints>> = {
+  serve: { forcing: 'unforced' },
+  rulo:  { hand: 'forehand' },
+}
+
 export interface LabelRecord {
   frame: number
   play_state: PlayState
@@ -110,6 +124,7 @@ export interface LabelRecord {
   impact: ImpactSurface | null
   shot_type: ShotType | null
   hand: Hand | null
+  forcing: ShotForcing | null
 }
 
 export interface VideoMeta {

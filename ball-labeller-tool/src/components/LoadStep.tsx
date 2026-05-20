@@ -210,7 +210,7 @@ export default function LoadStep({ onLoad }: Props) {
                   <span className="text-xs text-slate-400">Version:</span>
                   <span className="text-xs text-slate-500">detected v{detectedVersion}</span>
                   <div className="flex gap-1 ml-auto">
-                    {([0, 1, 2] as LabelVersion[]).map((v) => (
+                    {([0, 1, 2, 3] as LabelVersion[]).map((v) => (
                       <button
                         key={v}
                         onClick={() => handleVersionChange(v)}

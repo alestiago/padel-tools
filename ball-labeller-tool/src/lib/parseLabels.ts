@@ -1,7 +1,7 @@
-import type { Hand, ImpactSurface, LabelRecord, PlayState, ShotType, Visibility } from '../types.ts'
-import { HANDS, SHOT_TYPES } from '../types.ts'
+import type { Hand, ImpactSurface, LabelRecord, PlayState, ShotForcing, ShotType, Visibility } from '../types.ts'
+import { HANDS, SHOT_FORCINGS, SHOT_TYPES } from '../types.ts'
 
-export type LabelVersion = 0 | 1 | 2
+export type LabelVersion = 0 | 1 | 2 | 3
 
 export interface ParseResult {
   labels: LabelRecord[]
@@ -27,6 +27,11 @@ function toHand(val: string | null | undefined): Hand | null {
   return HANDS.includes(val as Hand) ? (val as Hand) : null
 }
 
+function toForcing(val: string | null | undefined): ShotForcing | null {
+  if (!val) return null
+  return SHOT_FORCINGS.includes(val as ShotForcing) ? (val as ShotForcing) : null
+}
+
 function toPlayState(val: string | null | undefined): PlayState {
   return val === 'dead' ? 'dead' : 'in_play'
 }
@@ -47,7 +52,8 @@ export function parseCsv(text: string, version: LabelVersion): ParseResult {
 
   const hasImpact = col('impact') !== -1
   const hasShotType = col('shot_type') !== -1 || col('hand') !== -1
-  const detectedVersion: LabelVersion = hasShotType ? 2 : hasImpact ? 1 : 0
+  const hasForcing = col('forcing') !== -1
+  const detectedVersion: LabelVersion = hasForcing ? 3 : hasShotType ? 2 : hasImpact ? 1 : 0
 
   const labels: LabelRecord[] = []
   for (let i = 1; i < dataLines.length; i++) {
@@ -65,6 +71,8 @@ export function parseCsv(text: string, version: LabelVersion): ParseResult {
     const shotStr = version >= 2 && shotIdx !== -1 ? parts[shotIdx] : undefined
     const handIdx = col('hand')
     const handStr = version >= 2 && handIdx !== -1 ? parts[handIdx] : undefined
+    const forcingIdx = col('forcing')
+    const forcingStr = version >= 3 && forcingIdx !== -1 ? parts[forcingIdx] : undefined
 
     labels.push({
       frame,
@@ -75,6 +83,7 @@ export function parseCsv(text: string, version: LabelVersion): ParseResult {
       impact: toImpact(impactStr),
       shot_type: toShotType(shotStr),
       hand: toHand(handStr),
+      forcing: toForcing(forcingStr),
     })
   }
 
@@ -95,7 +104,8 @@ export function parseJson(text: string, version: LabelVersion): ParseResult {
   const hasImpact = rawLabels.length > 0 && 'impact' in rawLabels[0]
   const hasShotType =
     rawLabels.length > 0 && ('shot_type' in rawLabels[0] || 'hand' in rawLabels[0])
-  const detectedVersion: LabelVersion = hasShotType ? 2 : hasImpact ? 1 : 0
+  const hasForcing = rawLabels.length > 0 && 'forcing' in rawLabels[0]
+  const detectedVersion: LabelVersion = hasForcing ? 3 : hasShotType ? 2 : hasImpact ? 1 : 0
 
   const labels: LabelRecord[] = rawLabels.map((r) => ({
     frame: Number(r.frame),
@@ -106,6 +116,7 @@ export function parseJson(text: string, version: LabelVersion): ParseResult {
     impact: version >= 1 && hasImpact ? toImpact(r.impact as string) : null,
     shot_type: version >= 2 ? toShotType(r.shot_type as string) : null,
     hand: version >= 2 ? toHand(r.hand as string) : null,
+    forcing: version >= 3 ? toForcing(r.forcing as string) : null,
   }))
 
   return { labels, detectedVersion, fps }
@@ -116,6 +127,7 @@ export function detectVersion(text: string, filename: string): LabelVersion {
     try {
       const data = JSON.parse(text) as Record<string, unknown>
       const first = (data.labels as Record<string, unknown>[] | undefined)?.[0]
+      if (first && 'forcing' in first) return 3
       if (first && ('shot_type' in first || 'hand' in first)) return 2
       if (first && 'impact' in first) return 1
       return 0
@@ -125,6 +137,7 @@ export function detectVersion(text: string, filename: string): LabelVersion {
   }
   const header = text.split('\n').find((l) => !l.startsWith('#') && l.trim() !== '') ?? ''
   const cols = header.split(',').map((h) => h.trim())
+  if (cols.includes('forcing')) return 3
   if (cols.includes('shot_type') || cols.includes('hand')) return 2
   if (cols.includes('impact')) return 1
   return 0

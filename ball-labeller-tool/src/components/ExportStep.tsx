@@ -22,6 +22,7 @@ export default function ExportStep({ meta, labels, onBack }: Props) {
   const impacts = arr.filter(r => r.impact !== null && r.impact !== undefined).length
   const racketImpacts = arr.filter(r => r.impact === 'racket').length
   const shotTypes = arr.filter(r => r.shot_type !== null && r.shot_type !== undefined).length
+  const forcingLabelled = arr.filter(r => r.forcing !== null && r.forcing !== undefined).length
 
   return (
     <div className="flex-1 flex flex-col items-center justify-start pt-12 px-8 gap-6">
@@ -84,6 +85,12 @@ export default function ExportStep({ meta, labels, onBack }: Props) {
                 <div className="flex justify-between text-green-300">
                   <span>Shot types labelled</span>
                   <span className="font-mono">{shotTypes} / {racketImpacts}</span>
+                </div>
+              )}
+              {racketImpacts > 0 && (
+                <div className="flex justify-between text-amber-300">
+                  <span>Forcing labelled</span>
+                  <span className="font-mono">{forcingLabelled} / {racketImpacts}</span>
                 </div>
               )}
             </div>

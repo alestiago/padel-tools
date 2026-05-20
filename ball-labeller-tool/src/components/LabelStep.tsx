@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Hand, ImpactSurface, LabelRecord, PlayState, ShotType, VideoMeta, Visibility } from '../types.ts'
-import { IMPACT_SURFACES } from '../types.ts'
+import type { Hand, ImpactSurface, LabelRecord, PlayState, ShotForcing, ShotType, VideoMeta, Visibility } from '../types.ts'
+import { IMPACT_SURFACES, SHOT_TYPE_CONSTRAINTS } from '../types.ts'
 import { seekToFrame } from '../lib/frameSeeker.ts'
 import { saveLabels } from '../lib/labelStore.ts'
 import VideoCanvas from './VideoCanvas.tsx'
@@ -45,6 +45,7 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
   const [stickyShot, setStickyShot] = useState<ShotType | null>(null)
   const [recentShots, setRecentShots] = useState<ShotType[]>([])
   const [stickyHand, setStickyHand] = useState<Hand | null>(null)
+  const [stickyForcing, setStickyForcing] = useState<ShotForcing | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
 
@@ -94,8 +95,9 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
     const existing = labels.get(currentFrame)
     const shot_type = surface === 'racket' ? stickyShot : null
     const hand = surface === 'racket' ? stickyHand : null
+    const forcing = surface === 'racket' ? stickyForcing : null
     if (existing) {
-      applyLabel({ ...existing, impact: surface, shot_type, hand })
+      applyLabel({ ...existing, impact: surface, shot_type, hand, forcing })
     } else {
       applyLabel({
         frame: currentFrame,
@@ -106,9 +108,10 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
         impact: surface,
         shot_type,
         hand,
+        forcing,
       })
     }
-  }, [currentFrame, labels, stickyPlay, stickyVis, stickyShot, stickyHand, applyLabel])
+  }, [currentFrame, labels, stickyPlay, stickyVis, stickyShot, stickyHand, stickyForcing, applyLabel])
 
   const handleSetHand = useCallback((h: Hand | null) => {
     const target = findLastRacketFrame(labels, currentFrame)
@@ -117,11 +120,27 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
     setStickyHand(h)
   }, [currentFrame, labels, applyLabel])
 
+  const handleSetForcing = useCallback((f: ShotForcing | null) => {
+    const target = findLastRacketFrame(labels, currentFrame)
+    if (target === null) return
+    applyLabel({ ...labels.get(target)!, forcing: f })
+    setStickyForcing(f)
+  }, [currentFrame, labels, applyLabel])
+
   const handleSetShotType = useCallback((t: ShotType | null) => {
     const target = findLastRacketFrame(labels, currentFrame)
     if (target === null) return
-    applyLabel({ ...labels.get(target)!, shot_type: t })
+    const constraints = t !== null ? (SHOT_TYPE_CONSTRAINTS[t] ?? {}) : {}
+    const existing = labels.get(target)!
+    applyLabel({
+      ...existing,
+      shot_type: t,
+      ...(constraints.hand !== undefined ? { hand: constraints.hand } : {}),
+      ...(constraints.forcing !== undefined ? { forcing: constraints.forcing } : {}),
+    })
     setStickyShot(t)
+    if (constraints.hand !== undefined) setStickyHand(constraints.hand)
+    if (constraints.forcing !== undefined) setStickyForcing(constraints.forcing)
     if (t !== null) {
       setRecentShots((prev) => {
         const filtered = prev.filter((s) => s !== t)
@@ -142,6 +161,7 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
       impact: existing?.impact ?? null,
       shot_type: existing?.shot_type ?? null,
       hand: existing?.hand ?? null,
+      forcing: existing?.forcing ?? null,
     }
     applyLabel(record)
     // Auto-advance one frame when visible
@@ -257,6 +277,7 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
               impact: null,
               shot_type: null,
               hand: null,
+              forcing: null,
             })
           }
           const next = Math.min(meta.frameCount - 1, currentFrame + delta)
@@ -423,7 +444,7 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
         </div>
 
         {/* Sidebar */}
-        <div className="w-[220px] shrink-0 flex flex-col gap-4 p-3 bg-slate-800 border-l border-slate-700 overflow-y-auto">
+        <div className="w-[260px] shrink-0 flex flex-col gap-4 p-3 bg-slate-800 border-l border-slate-700 overflow-y-auto">
           <PlayStateSelector value={stickyPlay} onChange={setStickyPlay} />
           <VisibilitySelector value={stickyVis} onChange={setStickyVis} />
           <ImpactSelector
@@ -455,6 +476,23 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
                       }`}
                     >
                       {h}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1">
+                  {(['forced', 'unforced'] as ShotForcing[]).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => handleSetForcing(lastRacketLabel?.forcing === f ? null : f)}
+                      className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors capitalize ${
+                        lastRacketLabel?.forcing === f
+                          ? f === 'forced'
+                            ? 'bg-amber-700 text-white'
+                            : 'bg-emerald-700 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      {f}
                     </button>
                   ))}
                 </div>

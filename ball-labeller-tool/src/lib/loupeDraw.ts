@@ -19,7 +19,6 @@ export function drawLoupe(
   mouseVideo: { x: number; y: number },
   videoScale: number,
   canvasW: number,
-  _canvasH: number,
 ): void {
   if (video.readyState < 2) return
 

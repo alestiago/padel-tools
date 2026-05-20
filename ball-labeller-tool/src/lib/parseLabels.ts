@@ -1,12 +1,11 @@
-import type { ImpactSurface, LabelRecord, PlayState, Visibility } from '../types.ts'
+import type { Hand, ImpactSurface, LabelRecord, PlayState, ShotType, Visibility } from '../types.ts'
+import { HANDS, SHOT_TYPES } from '../types.ts'
 
-export type LabelVersion = 0 | 1
+export type LabelVersion = 0 | 1 | 2
 
 export interface ParseResult {
   labels: LabelRecord[]
-  /** Version inferred from the file content — may differ from the user-selected override. */
   detectedVersion: LabelVersion
-  /** fps from JSON metadata, if present. */
   fps?: number
 }
 
@@ -14,6 +13,18 @@ function toImpact(val: string | null | undefined): ImpactSurface | null {
   if (!val) return null
   const valid: ImpactSurface[] = ['floor', 'racket', 'wall', 'fence', 'net']
   return valid.includes(val as ImpactSurface) ? (val as ImpactSurface) : null
+}
+
+function toShotType(val: string | null | undefined): ShotType | null {
+  if (!val) return null
+  // Migrate old name
+  const normalised = val === 'drive' ? 'groundstroke' : val === 'passing_volley' ? 'medium_volley' : val
+  return SHOT_TYPES.includes(normalised as ShotType) ? (normalised as ShotType) : null
+}
+
+function toHand(val: string | null | undefined): Hand | null {
+  if (!val) return null
+  return HANDS.includes(val as Hand) ? (val as Hand) : null
 }
 
 function toPlayState(val: string | null | undefined): PlayState {
@@ -26,11 +37,8 @@ function toVisibility(val: string | null | undefined): Visibility {
   return 'visible'
 }
 
-/** Parse a labels CSV (with or without leading # comment lines). */
 export function parseCsv(text: string, version: LabelVersion): ParseResult {
   const lines = text.split('\n')
-
-  // Strip comment lines to find the real header and data
   const dataLines = lines.filter((l) => !l.startsWith('#') && l.trim() !== '')
   if (dataLines.length === 0) return { labels: [], detectedVersion: 0 }
 
@@ -38,13 +46,13 @@ export function parseCsv(text: string, version: LabelVersion): ParseResult {
   const col = (name: string) => header.indexOf(name)
 
   const hasImpact = col('impact') !== -1
-  const detectedVersion: LabelVersion = hasImpact ? 1 : 0
+  const hasShotType = col('shot_type') !== -1 || col('hand') !== -1
+  const detectedVersion: LabelVersion = hasShotType ? 2 : hasImpact ? 1 : 0
 
   const labels: LabelRecord[] = []
   for (let i = 1; i < dataLines.length; i++) {
     const parts = dataLines[i].split(',')
-    const frameStr = parts[col('frame')]
-    const frame = parseInt(frameStr, 10)
+    const frame = parseInt(parts[col('frame')], 10)
     if (isNaN(frame)) continue
 
     const xStr = parts[col('x')]
@@ -52,7 +60,11 @@ export function parseCsv(text: string, version: LabelVersion): ParseResult {
     const x = xStr ? parseFloat(xStr) : null
     const y = yStr ? parseFloat(yStr) : null
 
-    const impactStr = version === 1 && hasImpact ? parts[col('impact')] : undefined
+    const impactStr = version >= 1 && hasImpact ? parts[col('impact')] : undefined
+    const shotIdx = col('shot_type')
+    const shotStr = version >= 2 && shotIdx !== -1 ? parts[shotIdx] : undefined
+    const handIdx = col('hand')
+    const handStr = version >= 2 && handIdx !== -1 ? parts[handIdx] : undefined
 
     labels.push({
       frame,
@@ -61,13 +73,14 @@ export function parseCsv(text: string, version: LabelVersion): ParseResult {
       x: x !== null && !isNaN(x) ? x : null,
       y: y !== null && !isNaN(y) ? y : null,
       impact: toImpact(impactStr),
+      shot_type: toShotType(shotStr),
+      hand: toHand(handStr),
     })
   }
 
   return { labels, detectedVersion }
 }
 
-/** Parse a labels JSON export. */
 export function parseJson(text: string, version: LabelVersion): ParseResult {
   let data: Record<string, unknown>
   try {
@@ -80,7 +93,9 @@ export function parseJson(text: string, version: LabelVersion): ParseResult {
   const fps = typeof data.fps === 'number' ? data.fps : undefined
 
   const hasImpact = rawLabels.length > 0 && 'impact' in rawLabels[0]
-  const detectedVersion: LabelVersion = hasImpact ? 1 : 0
+  const hasShotType =
+    rawLabels.length > 0 && ('shot_type' in rawLabels[0] || 'hand' in rawLabels[0])
+  const detectedVersion: LabelVersion = hasShotType ? 2 : hasImpact ? 1 : 0
 
   const labels: LabelRecord[] = rawLabels.map((r) => ({
     frame: Number(r.frame),
@@ -88,33 +103,34 @@ export function parseJson(text: string, version: LabelVersion): ParseResult {
     visibility: toVisibility(r.visibility as string),
     x: r.x != null ? Number(r.x) : null,
     y: r.y != null ? Number(r.y) : null,
-    impact: version === 1 && hasImpact ? toImpact(r.impact as string) : null,
+    impact: version >= 1 && hasImpact ? toImpact(r.impact as string) : null,
+    shot_type: version >= 2 ? toShotType(r.shot_type as string) : null,
+    hand: version >= 2 ? toHand(r.hand as string) : null,
   }))
 
   return { labels, detectedVersion, fps }
 }
 
-/** Read just enough of the file text to guess the schema version. */
 export function detectVersion(text: string, filename: string): LabelVersion {
   if (filename.toLowerCase().endsWith('.json')) {
     try {
       const data = JSON.parse(text) as Record<string, unknown>
       const first = (data.labels as Record<string, unknown>[] | undefined)?.[0]
-      return first && 'impact' in first ? 1 : 0
+      if (first && ('shot_type' in first || 'hand' in first)) return 2
+      if (first && 'impact' in first) return 1
+      return 0
     } catch {
       return 0
     }
   }
-  // CSV: check the header row (first non-comment line)
   const header = text.split('\n').find((l) => !l.startsWith('#') && l.trim() !== '') ?? ''
-  return header.split(',').map((h) => h.trim()).includes('impact') ? 1 : 0
+  const cols = header.split(',').map((h) => h.trim())
+  if (cols.includes('shot_type') || cols.includes('hand')) return 2
+  if (cols.includes('impact')) return 1
+  return 0
 }
 
-/** Top-level convenience: read a File and return a ParseResult. */
-export async function parseLabelsFile(
-  file: File,
-  version: LabelVersion,
-): Promise<ParseResult> {
+export async function parseLabelsFile(file: File, version: LabelVersion): Promise<ParseResult> {
   const text = await file.text()
   if (file.name.toLowerCase().endsWith('.json')) {
     return parseJson(text, version)

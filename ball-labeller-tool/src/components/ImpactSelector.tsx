@@ -24,7 +24,6 @@ const SURFACE_LABELS: Record<ImpactSurface, string> = {
 
 export default function ImpactSelector({ value, onChange }: Props) {
   const handleClick = (surface: ImpactSurface) => {
-    // clicking the active surface clears it
     onChange(value === surface ? null : surface)
   }
 
@@ -35,7 +34,6 @@ export default function ImpactSelector({ value, onChange }: Props) {
         <span className="ml-1.5 text-slate-600 normal-case font-normal">(I to cycle)</span>
       </p>
       <div className="flex flex-col gap-1">
-        {/* None / clear button */}
         <button
           onClick={() => onChange(null)}
           className={`w-full text-left px-3 py-1.5 rounded text-sm font-medium transition-colors ${

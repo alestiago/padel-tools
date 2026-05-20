@@ -24,8 +24,8 @@ export function loadLabels(filename: string): { labels: LabelRecord[]; fps: numb
   try {
     const data = JSON.parse(raw) as StoredData
     if (!Array.isArray(data.labels) || typeof data.fps !== 'number') return null
-    // Back-compat: older sessions won't have the impact field
-    const labels = data.labels.map((r) => ({ ...r, impact: r.impact ?? null }))
+    // Back-compat: older sessions won't have impact/shot_type fields
+    const labels = data.labels.map((r) => ({ ...r, impact: r.impact ?? null, shot_type: r.shot_type ?? null, hand: r.hand ?? null }))
     return { labels, fps: data.fps }
   } catch {
     return null

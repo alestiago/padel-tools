@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { LabelRecord, Visibility } from '../types.ts'
+import { SHOT_TYPE_ABBR, SHOT_TYPE_COLORS } from '../types.ts'
 import { drawLoupe } from '../lib/loupeDraw.ts'
 
 interface Props {
@@ -137,11 +138,19 @@ export default function VideoCanvas({
           ctx.strokeStyle = color
           ctx.lineWidth = 2
           ctx.stroke()
-          // label below diamond
+          // label below diamond: shot type abbreviation (racket) or surface name
+          const label =
+            curRec.impact === 'racket' && curRec.shot_type
+              ? SHOT_TYPE_ABBR[curRec.shot_type]
+              : curRec.impact
+          const labelColor =
+            curRec.impact === 'racket' && curRec.shot_type
+              ? SHOT_TYPE_COLORS[curRec.shot_type]
+              : color
           ctx.font = 'bold 11px sans-serif'
-          ctx.fillStyle = color
+          ctx.fillStyle = labelColor
           ctx.textAlign = 'center'
-          ctx.fillText(curRec.impact, dp.x, dp.y + r + 13)
+          ctx.fillText(label, dp.x, dp.y + r + 13)
           ctx.textAlign = 'left'
         }
       }
@@ -151,7 +160,7 @@ export default function VideoCanvas({
     const mouse = mouseRef.current
     const layout = getLayout()
     if (mouse && video && layout && stickyVis !== 'out_of_frame') {
-      drawLoupe(ctx, video, mouse.display, mouse.video, layout.scale, cw, ch)
+      drawLoupe(ctx, video, mouse.display, mouse.video, layout.scale, cw)
     }
 
     ctx.restore()

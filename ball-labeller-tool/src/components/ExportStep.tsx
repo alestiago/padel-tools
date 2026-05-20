@@ -20,6 +20,8 @@ export default function ExportStep({ meta, labels, onBack }: Props) {
   const inPlayOof = arr.filter(r => r.play_state === 'in_play' && r.visibility === 'out_of_frame').length
   const dead = arr.filter(r => r.play_state === 'dead').length
   const impacts = arr.filter(r => r.impact !== null && r.impact !== undefined).length
+  const racketImpacts = arr.filter(r => r.impact === 'racket').length
+  const shotTypes = arr.filter(r => r.shot_type !== null && r.shot_type !== undefined).length
 
   return (
     <div className="flex-1 flex flex-col items-center justify-start pt-12 px-8 gap-6">
@@ -73,12 +75,18 @@ export default function ExportStep({ meta, labels, onBack }: Props) {
             <span className="font-mono">{dead}</span>
           </div>
           {impacts > 0 && (
-            <>
-              <div className="border-t border-slate-600 pt-2 mt-1 flex justify-between text-orange-300">
+            <div className="border-t border-slate-600 pt-2 mt-1 space-y-1">
+              <div className="flex justify-between text-orange-300">
                 <span>Impacts labelled</span>
                 <span className="font-mono">{impacts}</span>
               </div>
-            </>
+              {racketImpacts > 0 && (
+                <div className="flex justify-between text-green-300">
+                  <span>Shot types labelled</span>
+                  <span className="font-mono">{shotTypes} / {racketImpacts}</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

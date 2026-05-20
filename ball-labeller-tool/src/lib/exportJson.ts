@@ -13,8 +13,9 @@ export function exportJson(meta: VideoMeta, labels: Map<number, LabelRecord>): v
   const sorted = [...labels.values()].sort((a, b) => a.frame - b.frame)
 
   const hasImpact = sorted.some((r) => r.impact !== null && r.impact !== undefined)
+  const hasShotType = sorted.some((r) => r.shot_type !== null && r.shot_type !== undefined)
   const data: ExportShape = {
-    version: hasImpact ? 1 : 0,
+    version: hasShotType ? 2 : hasImpact ? 1 : 0,
     video_file: meta.file.name,
     fps: meta.fps,
     frame_count: meta.frameCount,

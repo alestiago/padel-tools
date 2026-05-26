@@ -9,6 +9,8 @@ interface Props {
   activeKeypoint: KeypointId
   onSelect: (id: KeypointId) => void
   onRemove: (id: KeypointId) => void
+  pinned: boolean
+  onTogglePin: () => void
 }
 
 function StatusDot({ vis }: { vis?: 'visible' | 'occluded' | 'not_in_frame' }) {
@@ -18,7 +20,7 @@ function StatusDot({ vis }: { vis?: 'visible' | 'occluded' | 'not_in_frame' }) {
   return <span className="w-2 h-2 rounded-full bg-slate-600 shrink-0" />
 }
 
-export default function KeypointPanel({ keypoints, activeKeypoint, onSelect, onRemove }: Props) {
+export default function KeypointPanel({ keypoints, activeKeypoint, onSelect, onRemove, pinned, onTogglePin }: Props) {
   const angles = computeAngles(keypoints)
   const allAngleDefs = [
     ...ANGLE_DEFS,
@@ -28,7 +30,20 @@ export default function KeypointPanel({ keypoints, activeKeypoint, onSelect, onR
   return (
     <div className="flex flex-col gap-4 h-full overflow-y-auto">
       <div>
-        <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-2">Keypoints</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-slate-400 uppercase tracking-wide font-medium">Keypoints</p>
+          <button
+            onClick={onTogglePin}
+            title="Pin active keypoint across frames (P)"
+            className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+              pinned
+                ? 'bg-amber-600 text-white'
+                : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            {pinned ? '📌 pinned' : 'pin'}
+          </button>
+        </div>
         <div className="space-y-3">
           {KEYPOINT_GROUPS.map((group) => (
             <div key={group.label}>

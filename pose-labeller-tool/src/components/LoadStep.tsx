@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
-import type { VideoMeta } from '../types.ts'
+import type { KeypointsMap, VideoMeta } from '../types.ts'
+import { parsePosesJson, detectPoseVersion, type PoseFileVersion } from '../lib/parsePoses.ts'
 
 interface Props {
-  onLoad: (meta: VideoMeta) => void
+  onLoad: (meta: VideoMeta, initialLabels?: Map<number, KeypointsMap>) => void
 }
 
 export default function LoadStep({ onLoad }: Props) {
@@ -11,8 +12,14 @@ export default function LoadStep({ onLoad }: Props) {
   const [videoDims, setVideoDims] = useState<{ width: number; height: number; duration: number } | null>(null)
   const [dragging, setDragging] = useState(false)
 
+  const [posesFile, setPosesFile] = useState<File | null>(null)
+  const [detectedVersion, setDetectedVersion] = useState<PoseFileVersion>(2)
+  const [parsedLabels, setParsedLabels] = useState<Map<number, KeypointsMap> | null>(null)
+  const [frameCount, setFrameCount] = useState(0)
+
   const hiddenVideoRef = useRef<HTMLVideoElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const posesInputRef = useRef<HTMLInputElement | null>(null)
 
   const processFile = (f: File) => {
     setFile(f)
@@ -36,10 +43,38 @@ export default function LoadStep({ onLoad }: Props) {
     if (f) processFile(f)
   }
 
-  const handleStart = () => {
+  const handlePosesFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    const text = await f.text()
+    const version = detectPoseVersion(text)
+    setDetectedVersion(version)
+    const result = parsePosesJson(text)
+    setPosesFile(f)
+    if (result) {
+      setParsedLabels(result.frameLabels)
+      setFrameCount(result.frameLabels.size)
+      if (result.fps) setFps(result.fps)
+    } else {
+      setParsedLabels(null)
+      setFrameCount(0)
+    }
+  }
+
+  const clearPosesFile = () => {
+    setPosesFile(null)
+    setParsedLabels(null)
+    setFrameCount(0)
+    if (posesInputRef.current) posesInputRef.current.value = ''
+  }
+
+  const handleStart = (labels?: Map<number, KeypointsMap>) => {
     if (!file || !videoDims) return
-    const frameCount = Math.floor(videoDims.duration * fps)
-    onLoad({ file, fps, frameCount, width: videoDims.width, height: videoDims.height, duration: videoDims.duration })
+    const frames = Math.floor(videoDims.duration * fps)
+    onLoad(
+      { file, fps, frameCount: frames, width: videoDims.width, height: videoDims.height, duration: videoDims.duration },
+      labels,
+    )
   }
 
   return (
@@ -106,12 +141,69 @@ export default function LoadStep({ onLoad }: Props) {
             <span className="text-slate-500 text-sm">= {Math.floor(videoDims.duration * fps)} frames</span>
           </div>
 
-          <button
-            onClick={handleStart}
-            className="w-full bg-green-700 hover:bg-green-600 text-white font-medium py-2.5 rounded-lg transition-colors"
-          >
-            Start Labelling
-          </button>
+          {/* Pre-load poses section */}
+          <div className="border-t border-slate-700 pt-3 space-y-2">
+            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Pre-load poses (optional)</p>
+            <input
+              ref={posesInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handlePosesFileInput}
+            />
+            {!posesFile ? (
+              <button
+                onClick={() => posesInputRef.current?.click()}
+                className="w-full border border-dashed border-slate-600 hover:border-slate-400 text-slate-400 hover:text-slate-200 text-sm py-2 rounded-lg transition-colors"
+              >
+                Load existing poses JSON
+              </button>
+            ) : (
+              <div className="bg-slate-700 rounded-lg p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-slate-200 text-sm font-medium truncate">{posesFile.name}</p>
+                    <p className="text-slate-400 text-xs mt-0.5">
+                      {parsedLabels ? `${frameCount} frame${frameCount !== 1 ? 's' : ''} loaded` : 'Could not parse file'}
+                      {' · '}
+                      <span className="text-slate-500">v{detectedVersion}</span>
+                    </p>
+                  </div>
+                  <button
+                    onClick={clearPosesFile}
+                    className="text-slate-500 hover:text-slate-300 text-xs shrink-0 mt-0.5"
+                  >
+                    remove
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          {parsedLabels ? (
+            <div className="space-y-2">
+              <button
+                onClick={() => handleStart(parsedLabels)}
+                className="w-full bg-green-700 hover:bg-green-600 text-white font-medium py-2.5 rounded-lg transition-colors"
+              >
+                Start with {frameCount} loaded frame{frameCount !== 1 ? 's' : ''}
+              </button>
+              <button
+                onClick={() => handleStart(undefined)}
+                className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium py-2 rounded-lg transition-colors"
+              >
+                Start fresh instead
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleStart(undefined)}
+              className="w-full bg-green-700 hover:bg-green-600 text-white font-medium py-2.5 rounded-lg transition-colors"
+            >
+              Start Labelling
+            </button>
+          )}
         </div>
       )}
     </div>

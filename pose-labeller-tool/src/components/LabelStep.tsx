@@ -7,6 +7,7 @@ import KeypointPanel from './KeypointPanel.tsx'
 
 interface Props {
   meta: VideoMeta
+  initialLabels?: Map<number, KeypointsMap>
 }
 
 function nextUnplacedKeypoint(current: KeypointId, keypoints: KeypointsMap): KeypointId {
@@ -25,10 +26,11 @@ function frameToTime(frame: number, fps: number): string {
   return `${String(m).padStart(2, '0')}:${s}`
 }
 
-export default function LabelStep({ meta }: Props) {
+export default function LabelStep({ meta, initialLabels }: Props) {
   const [currentFrame, setCurrentFrame] = useState(0)
-  const [frameLabels, setFrameLabels] = useState<Map<number, KeypointsMap>>(new Map())
+  const [frameLabels, setFrameLabels] = useState<Map<number, KeypointsMap>>(initialLabels ?? new Map())
   const [activeKeypoint, setActiveKeypoint] = useState<KeypointId>('head')
+  const [pinned, setPinned] = useState(false)
   const undoStack = useRef<KeypointId[]>([])
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -84,8 +86,10 @@ export default function LabelStep({ meta }: Props) {
       undoStack.current.push(id)
       return { ...prev, [id]: { x, y, visibility: 'visible' as const } }
     })
-    setActiveKeypoint(prev => nextUnplacedKeypoint(prev, { ...keypoints, [id]: { x, y, visibility: 'visible' } }))
-  }, [keypoints, updateKeypoints])
+    if (!pinned) {
+      setActiveKeypoint(prev => nextUnplacedKeypoint(prev, { ...keypoints, [id]: { x, y, visibility: 'visible' } }))
+    }
+  }, [keypoints, pinned, updateKeypoints])
 
   const handleRemove = useCallback((id: KeypointId) => {
     updateKeypoints(prev => { const n = { ...prev }; delete n[id]; return n })
@@ -138,6 +142,12 @@ export default function LabelStep({ meta }: Props) {
         e.preventDefault()
         const idx = KEYPOINT_IDS.indexOf(activeKeypoint)
         setActiveKeypoint(KEYPOINT_IDS[(idx + (e.shiftKey ? -1 + KEYPOINT_IDS.length : 1)) % KEYPOINT_IDS.length])
+        return
+      }
+
+      if (e.key === 'p') {
+        e.preventDefault()
+        setPinned(prev => !prev)
         return
       }
 
@@ -241,6 +251,8 @@ export default function LabelStep({ meta }: Props) {
             activeKeypoint={activeKeypoint}
             onSelect={setActiveKeypoint}
             onRemove={handleRemove}
+            pinned={pinned}
+            onTogglePin={() => setPinned(prev => !prev)}
           />
         </div>
       </div>
@@ -304,7 +316,7 @@ export default function LabelStep({ meta }: Props) {
           </button>
           <span className="w-px h-5 bg-slate-600 mx-1 shrink-0" />
           <span className="text-xs text-slate-500">
-            [ / ] — prev/next label · Tab — cycle kp · Del — remove kp · Cmd+Z — undo · right-click — options
+            [ / ] — prev/next label · Tab — cycle kp · P — pin · Del — remove kp · Cmd+Z — undo · right-click — options
           </span>
         </div>
       </div>

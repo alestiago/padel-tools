@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { LabelRecord, Visibility } from '../types.ts'
 import { SHOT_TYPE_ABBR, SHOT_TYPE_COLORS } from '../types.ts'
-import { drawLoupe } from '../lib/loupeDraw.ts'
+import { drawLoupe } from '@shared/loupeDraw.ts'
+
+const IMPACT_COLORS: Record<string, string> = {
+  floor: '#f97316', racket: '#22c55e', wall: '#22d3ee',
+  fence: '#ef4444', net: '#94a3b8',
+}
+const IMPACT_LINGER_FRAMES = 90
 
 interface Props {
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -10,6 +16,7 @@ interface Props {
   labels: Map<number, LabelRecord>
   currentFrame: number
   stickyVis: Visibility
+  isPlaying: boolean
   onVideoClick: (x: number, y: number) => void
 }
 
@@ -26,6 +33,7 @@ export default function VideoCanvas({
   labels,
   currentFrame,
   stickyVis,
+  isPlaying,
   onVideoClick,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -85,8 +93,14 @@ export default function VideoCanvas({
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, cw, ch)
 
-    // Trail dots: frames currentFrame-5 to currentFrame-1
-    for (let i = 5; i >= 1; i--) {
+    // Dead-point tint
+    if (labels.get(currentFrame)?.play_state === 'dead') {
+      ctx.fillStyle = 'rgba(220, 38, 38, 0.18)'
+      ctx.fillRect(0, 0, cw, ch)
+    }
+
+    // Trail dots: only while playing
+    for (let i = isPlaying ? 5 : 0; i >= 1; i--) {
       const f = currentFrame - i
       if (f < 0) continue
       const rec = labels.get(f)
@@ -99,6 +113,8 @@ export default function VideoCanvas({
       ctx.arc(dp.x, dp.y, 4, 0, Math.PI * 2)
       if (rec.visibility === 'visible') {
         ctx.fillStyle = '#22c55e'
+      } else if (rec.visibility === 'motion_blur') {
+        ctx.fillStyle = '#22d3ee'
       } else {
         ctx.fillStyle = '#f97316'
       }
@@ -111,24 +127,51 @@ export default function VideoCanvas({
     if (curRec && curRec.x !== null && curRec.y !== null) {
       const dp = toDisplay(curRec.x, curRec.y)
       if (dp) {
+        const markerColor = curRec.visibility === 'motion_blur' ? '#22d3ee' : '#ffffff'
         ctx.beginPath()
         ctx.arc(dp.x, dp.y, 6, 0, Math.PI * 2)
-        ctx.strokeStyle = '#ffffff'
+        ctx.strokeStyle = markerColor
         ctx.lineWidth = 2
         ctx.stroke()
         ctx.beginPath()
         ctx.arc(dp.x, dp.y, 2, 0, Math.PI * 2)
-        ctx.fillStyle = '#ffffff'
+        ctx.fillStyle = markerColor
         ctx.fill()
 
-        // Impact indicator — diamond + label when this frame has an impact
-        if (curRec.impact) {
-          const IMPACT_COLORS: Record<string, string> = {
-            floor: '#f97316', racket: '#22c55e', wall: '#22d3ee',
-            fence: '#ef4444', net: '#94a3b8',
+      }
+    }
+
+    // Impact overlay — on current frame always; lingers while playing
+    {
+      // Step 1: find the most recent impact frame (position not required)
+      let impactRec: LabelRecord | null = null
+      let framesAgo = 0
+      const lingerWindow = isPlaying ? IMPACT_LINGER_FRAMES : 0
+      for (let i = 0; i <= lingerWindow; i++) {
+        const rec = labels.get(currentFrame - i)
+        if (rec?.impact) { impactRec = rec; framesAgo = i; break }
+      }
+      // Step 2: resolve display position — use impact frame's coords, or
+      // scan up to 5 frames either side for the nearest labelled position
+      let dispX: number | null = impactRec?.x ?? null
+      let dispY: number | null = impactRec?.y ?? null
+      if (impactRec && (dispX === null || dispY === null)) {
+        const impactFrame = currentFrame - framesAgo
+        for (let di = 1; di <= 5; di++) {
+          for (const f of [impactFrame + di, impactFrame - di]) {
+            const r = labels.get(f)
+            if (r && r.x !== null && r.y !== null) { dispX = r.x; dispY = r.y; break }
           }
-          const color = IMPACT_COLORS[curRec.impact] ?? '#facc15'
+          if (dispX !== null) break
+        }
+      }
+      if (impactRec && dispX !== null && dispY !== null) {
+        const dp = toDisplay(dispX, dispY)
+        if (dp) {
+          const alpha = 1 - framesAgo / IMPACT_LINGER_FRAMES
+          const color = IMPACT_COLORS[impactRec.impact!] ?? '#facc15'
           const r = 11
+          ctx.globalAlpha = alpha
           ctx.beginPath()
           ctx.moveTo(dp.x, dp.y - r)
           ctx.lineTo(dp.x + r, dp.y)
@@ -138,20 +181,20 @@ export default function VideoCanvas({
           ctx.strokeStyle = color
           ctx.lineWidth = 2
           ctx.stroke()
-          // label below diamond: shot type abbreviation (racket) or surface name
           const label =
-            curRec.impact === 'racket' && curRec.shot_type
-              ? SHOT_TYPE_ABBR[curRec.shot_type]
-              : curRec.impact
+            impactRec.impact === 'racket' && impactRec.shot_type
+              ? SHOT_TYPE_ABBR[impactRec.shot_type]
+              : impactRec.impact!
           const labelColor =
-            curRec.impact === 'racket' && curRec.shot_type
-              ? SHOT_TYPE_COLORS[curRec.shot_type]
+            impactRec.impact === 'racket' && impactRec.shot_type
+              ? SHOT_TYPE_COLORS[impactRec.shot_type]
               : color
           ctx.font = 'bold 11px sans-serif'
           ctx.fillStyle = labelColor
           ctx.textAlign = 'center'
           ctx.fillText(label, dp.x, dp.y + r + 13)
           ctx.textAlign = 'left'
+          ctx.globalAlpha = 1
         }
       }
     }
@@ -164,7 +207,7 @@ export default function VideoCanvas({
     }
 
     ctx.restore()
-  }, [videoRef, currentFrame, labels, stickyVis, toDisplay, getLayout])
+  }, [videoRef, currentFrame, labels, stickyVis, isPlaying, toDisplay, getLayout])
 
   // Redraw whenever relevant state changes
   useEffect(() => {

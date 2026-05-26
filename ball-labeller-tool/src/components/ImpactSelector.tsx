@@ -1,5 +1,5 @@
 import type { ImpactSurface } from '../types.ts'
-import { IMPACT_SURFACES } from '../types.ts'
+import { IMPACT_SHORTCUTS, IMPACT_SURFACES } from '../types.ts'
 
 interface Props {
   value: ImpactSurface | null
@@ -29,10 +29,7 @@ export default function ImpactSelector({ value, onChange }: Props) {
 
   return (
     <div className="space-y-1.5">
-      <p className="text-xs text-slate-400 uppercase tracking-wide font-medium">
-        Impact
-        <span className="ml-1.5 text-slate-600 normal-case font-normal">(I to cycle)</span>
-      </p>
+      <p className="text-xs text-slate-400 uppercase tracking-wide font-medium">Impact</p>
       <div className="grid grid-cols-2 gap-1">
         <button
           onClick={() => onChange(null)}
@@ -55,6 +52,7 @@ export default function ImpactSelector({ value, onChange }: Props) {
             }`}
           >
             {SURFACE_LABELS[surface]}
+            <span className="ml-1 text-xs opacity-50">({IMPACT_SHORTCUTS[surface]})</span>
           </button>
         ))}
       </div>

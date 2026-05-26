@@ -9,10 +9,10 @@ export default function PlayStateSelector({ value, onChange }: Props) {
   return (
     <div className="space-y-1.5">
       <p className="text-xs text-slate-400 uppercase tracking-wide font-medium">Play State</p>
-      <div className="flex gap-1.5">
+      <div className="grid grid-cols-2 gap-1">
         <button
           onClick={() => onChange('in_play')}
-          className={`flex-1 px-2 py-2 rounded text-sm font-medium transition-colors ${
+          className={`px-2 py-1.5 rounded text-sm font-medium transition-colors ${
             value === 'in_play'
               ? 'bg-green-700 text-white'
               : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
@@ -22,13 +22,23 @@ export default function PlayStateSelector({ value, onChange }: Props) {
         </button>
         <button
           onClick={() => onChange('dead')}
-          className={`flex-1 px-2 py-2 rounded text-sm font-medium transition-colors ${
+          className={`px-2 py-1.5 rounded text-sm font-medium transition-colors ${
             value === 'dead'
               ? 'bg-red-700 text-white'
               : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
           }`}
         >
           Dead <span className="text-xs opacity-60">(D)</span>
+        </button>
+        <button
+          onClick={() => onChange('unspecified')}
+          className={`col-span-2 px-2 py-1.5 rounded text-sm font-medium transition-colors ${
+            value === 'unspecified'
+              ? 'bg-slate-500 text-white'
+              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+          }`}
+        >
+          Unspecified <span className="text-xs opacity-60">(U)</span>
         </button>
       </div>
     </div>

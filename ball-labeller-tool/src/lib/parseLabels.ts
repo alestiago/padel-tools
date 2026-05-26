@@ -33,12 +33,16 @@ function toForcing(val: string | null | undefined): ShotForcing | null {
 }
 
 function toPlayState(val: string | null | undefined): PlayState {
-  return val === 'dead' ? 'dead' : 'in_play'
+  if (val === 'dead') return 'dead'
+  if (val === 'unspecified') return 'unspecified'
+  return 'in_play'
 }
 
 function toVisibility(val: string | null | undefined): Visibility {
+  if (val === 'motion_blur') return 'motion_blur'
   if (val === 'occluded') return 'occluded'
   if (val === 'out_of_frame') return 'out_of_frame'
+  if (val === 'unspecified') return 'unspecified'
   return 'visible'
 }
 

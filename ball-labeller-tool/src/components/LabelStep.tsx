@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Hand, ImpactSurface, LabelRecord, PlayState, ShotForcing, ShotType, VideoMeta, Visibility } from '../types.ts'
-import { IMPACT_SURFACES, SHOT_TYPE_CONSTRAINTS } from '../types.ts'
+import { IMPACT_SHORTCUTS, IMPACT_SURFACES, SHOT_TYPE_CONSTRAINTS } from '../types.ts'
 import { seekToFrame } from '../lib/frameSeeker.ts'
 import { saveLabels } from '../lib/labelStore.ts'
 import VideoCanvas from './VideoCanvas.tsx'
@@ -38,9 +38,11 @@ function formatTime(frame: number, fps: number): string {
   return `${String(mins).padStart(2, '0')}:${secs}`
 }
 
+const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2]
+
 export default function LabelStep({ meta, labels, onChange }: Props) {
   const [currentFrame, setCurrentFrame] = useState(0)
-  const [stickyPlay, setStickyPlay] = useState<PlayState>('in_play')
+  const [stickyPlay, setStickyPlay] = useState<PlayState>('unspecified')
   const [stickyVis, setStickyVis] = useState<Visibility>('visible')
   const [stickyShot, setStickyShot] = useState<ShotType | null>(null)
   const [recentShots, setRecentShots] = useState<ShotType[]>([])
@@ -48,6 +50,7 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
   const [stickyForcing, setStickyForcing] = useState<ShotForcing | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [playbackRate, setPlaybackRate] = useState(1)
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const seekingRef = useRef(false)
@@ -89,6 +92,23 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
     next.set(record.frame, record)
     onChange(next)
   }, [labels, onChange])
+
+  const changePlay = useCallback((play: PlayState) => {
+    setStickyPlay(play)
+    const existing = labels.get(currentFrame)
+    if (existing) applyLabel({ ...existing, play_state: play })
+  }, [labels, currentFrame, applyLabel])
+
+  const changeVis = useCallback((vis: Visibility) => {
+    setStickyVis(vis)
+    const existing = labels.get(currentFrame)
+    if (existing) applyLabel({ ...existing, visibility: vis })
+  }, [labels, currentFrame, applyLabel])
+
+  const applyRate = useCallback((rate: number) => {
+    setPlaybackRate(rate)
+    if (videoRef.current) videoRef.current.playbackRate = rate
+  }, [])
 
   // Set / clear the impact surface on the current frame's label
   const handleSetImpact = useCallback((surface: ImpactSurface | null) => {
@@ -151,11 +171,13 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
 
   const handleVideoClick = useCallback((x: number, y: number) => {
     if (stickyVis === 'out_of_frame') return
+    const vis = stickyVis === 'unspecified' ? 'visible' : stickyVis
+    if (vis !== stickyVis) setStickyVis(vis)
     const existing = labels.get(currentFrame)
     const record: LabelRecord = {
       frame: currentFrame,
       play_state: stickyPlay,
-      visibility: stickyVis,
+      visibility: vis,
       x,
       y,
       impact: existing?.impact ?? null,
@@ -164,12 +186,20 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
       forcing: existing?.forcing ?? null,
     }
     applyLabel(record)
-    // Auto-advance one frame when visible
-    if (stickyVis === 'visible') {
+    // Auto-advance one frame when ball is visible (including motion blur)
+    if (vis === 'visible' || vis === 'motion_blur') {
       const next = Math.min(meta.frameCount - 1, currentFrame + 1)
       void seek(next)
     }
   }, [stickyVis, stickyPlay, currentFrame, labels, applyLabel, seek, meta.frameCount])
+
+  // Sync sticky selectors to the label of the newly navigated-to frame
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const rec = labels.get(currentFrame)
+    setStickyPlay(rec?.play_state ?? 'unspecified')
+    setStickyVis(rec?.visibility ?? 'unspecified')
+  }, [currentFrame])
 
   // Auto-save with 2s debounce
   useEffect(() => {
@@ -207,13 +237,15 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
       }
 
       // Play state
-      if (key === 'p' || key === 'P') { setStickyPlay('in_play'); return }
-      if (key === 'd' || key === 'D') { setStickyPlay('dead'); return }
+      if (key === 'p' || key === 'P') { changePlay('in_play'); return }
+      if (key === 'd' || key === 'D') { changePlay('dead'); return }
+      if (key === 'u' || key === 'U') { changePlay('unspecified'); return }
 
       // Visibility
-      if (key === 'v' || key === 'V') { setStickyVis('visible'); return }
-      if (key === 'o' || key === 'O') { setStickyVis('occluded'); return }
-      if (key === 'f' || key === 'F') { setStickyVis('out_of_frame'); return }
+      if (key === 'v' || key === 'V') { changeVis('visible'); return }
+      if (key === 'm' || key === 'M') { changeVis('motion_blur'); return }
+      if (key === 'o' || key === 'O') { changeVis('occluded'); return }
+      if (key === 'k' || key === 'K') { changeVis('out_of_frame'); return }
 
       // Shot type search focus
       if (key === 't' || key === 'T') {
@@ -221,7 +253,18 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
         return
       }
 
-      // Impact — cycle through surfaces with I
+      // Impact — direct shortcuts or cycle with I
+      {
+        const upperKey = key.toUpperCase()
+        const directSurface = IMPACT_SURFACES.find(
+          (s) => IMPACT_SHORTCUTS[s] === upperKey
+        )
+        if (directSurface) {
+          const cur = labels.get(currentFrame)?.impact ?? null
+          handleSetImpact(cur === directSurface ? null : directSurface)
+          return
+        }
+      }
       if (key === 'i' || key === 'I') {
         const cur = labels.get(currentFrame)?.impact ?? null
         const idx = cur === null ? 0 : IMPACT_SURFACES.indexOf(cur) + 1
@@ -253,6 +296,18 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
         return
       }
 
+      // Playback speed
+      if (key === '[' || key === '{') {
+        const idx = PLAYBACK_SPEEDS.indexOf(playbackRate)
+        if (idx > 0) applyRate(PLAYBACK_SPEEDS[idx - 1])
+        return
+      }
+      if (key === ']' || key === '}') {
+        const idx = PLAYBACK_SPEEDS.indexOf(playbackRate)
+        if (idx < PLAYBACK_SPEEDS.length - 1) applyRate(PLAYBACK_SPEEDS[idx + 1])
+        return
+      }
+
       // Go to next unlabelled frame
       if (key === 'g' || key === 'G') {
         let f = currentFrame + 1
@@ -266,8 +321,9 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
         e.preventDefault()
         const delta = e.shiftKey ? 10 : 1
         if (key === 'ArrowRight') {
-          // Auto-label non-visible frames on right arrow
-          if (stickyVis !== 'visible' && !labels.has(currentFrame)) {
+          // Auto-label on right arrow when play state is pinned, or visibility is explicitly non-visible
+          const isExplicitNonVisible = stickyVis === 'occluded' || stickyVis === 'out_of_frame'
+          if ((stickyPlay !== 'unspecified' || isExplicitNonVisible) && !labels.has(currentFrame)) {
             applyLabel({
               frame: currentFrame,
               play_state: stickyPlay,
@@ -292,27 +348,37 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [currentFrame, stickyPlay, stickyVis, labels, onChange, seek, applyLabel, handleSetImpact, meta.frameCount, shotSearchRef])
+  }, [currentFrame, stickyPlay, stickyVis, labels, onChange, seek, applyLabel, handleSetImpact, meta.frameCount, shotSearchRef, playbackRate, applyRate, changePlay, changeVis])
 
-  // Handle video timeupdate when playing
+  // Track play/pause state from the video element
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    const onTimeUpdate = () => {
-      const f = Math.round(video.currentTime * meta.fps)
-      setCurrentFrame(Math.min(meta.frameCount - 1, f))
-    }
     const onPause = () => setIsPlaying(false)
     const onPlay = () => setIsPlaying(true)
-    video.addEventListener('timeupdate', onTimeUpdate)
     video.addEventListener('pause', onPause)
     video.addEventListener('play', onPlay)
     return () => {
-      video.removeEventListener('timeupdate', onTimeUpdate)
       video.removeEventListener('pause', onPause)
       video.removeEventListener('play', onPlay)
     }
-  }, [meta.fps, meta.frameCount])
+  }, [])
+
+  // RAF loop — keeps currentFrame in sync with the video at display refresh rate
+  useEffect(() => {
+    if (!isPlaying) return
+    let rafId: number
+    const tick = () => {
+      const video = videoRef.current
+      if (video && !video.paused) {
+        const f = Math.round(video.currentTime * meta.fps)
+        setCurrentFrame(Math.min(meta.frameCount - 1, f))
+        rafId = requestAnimationFrame(tick)
+      }
+    }
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  }, [isPlaying, meta.fps, meta.frameCount])
 
   const handleSeek = (frame: number) => {
     const video = videoRef.current
@@ -361,9 +427,11 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
         <div className="flex items-center gap-3 text-slate-400">
           {curLabel && (
             <span className={`text-xs px-2 py-0.5 rounded ${
-              curLabel.play_state === 'in_play' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+              curLabel.play_state === 'in_play' ? 'bg-green-900 text-green-300'
+              : curLabel.play_state === 'dead' ? 'bg-red-900 text-red-300'
+              : 'bg-slate-700 text-slate-400'
             }`}>
-              {curLabel.play_state === 'in_play' ? 'In Play' : 'Dead'}
+              {curLabel.play_state === 'in_play' ? 'In Play' : curLabel.play_state === 'dead' ? 'Dead' : 'Unspecified'}
             </span>
           )}
           {curLabel && (
@@ -392,6 +460,7 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
               labels={labels}
               currentFrame={currentFrame}
               stickyVis={stickyVis}
+              isPlaying={isPlaying}
               onVideoClick={handleVideoClick}
             />
           </div>
@@ -439,14 +508,29 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
               >
                 &#9654;&#9654;
               </button>
+              <span className="w-px h-5 bg-slate-600 mx-1 shrink-0" />
+              {PLAYBACK_SPEEDS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => applyRate(s)}
+                  title={`${s}× speed`}
+                  className={`px-2 py-1.5 text-xs rounded font-mono transition-colors ${
+                    playbackRate === s
+                      ? 'bg-slate-500 text-white'
+                      : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
+                  }`}
+                >
+                  {s}×
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
         {/* Sidebar */}
         <div className="w-[260px] shrink-0 flex flex-col gap-4 p-3 bg-slate-800 border-l border-slate-700 overflow-y-auto">
-          <PlayStateSelector value={stickyPlay} onChange={setStickyPlay} />
-          <VisibilitySelector value={stickyVis} onChange={setStickyVis} />
+          <PlayStateSelector value={stickyPlay} onChange={changePlay} />
+          <VisibilitySelector value={stickyVis} onChange={changeVis} />
           <ImpactSelector
             value={curLabel?.impact ?? null}
             onChange={handleSetImpact}
@@ -534,6 +618,7 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
                   ['Space', 'Play / pause'],
                   ['→ / ←', 'Next / prev frame'],
                   ['Shift + →/←', '+10 / −10 frames'],
+                  ['[ / ]', 'Slower / faster'],
                 ]],
                 ['Labels', [
                   ['Click', 'Place ball position'],
@@ -544,14 +629,21 @@ export default function LabelStep({ meta, labels, onChange }: Props) {
                 ['Play state', [
                   ['P', 'In play'],
                   ['D', 'Dead'],
+                  ['U', 'Unspecified'],
                 ]],
                 ['Visibility', [
                   ['V', 'Visible'],
+                  ['M', 'Motion blur'],
                   ['O', 'Occluded'],
-                  ['F', 'Out of frame'],
+                  ['K', 'Out of frame'],
                 ]],
                 ['Impact & stroke', [
-                  ['I', 'Cycle impact surface'],
+                  ['R', 'Racket'],
+                  ['F', 'Floor'],
+                  ['W', 'Wall'],
+                  ['E', 'Fence'],
+                  ['N', 'Net'],
+                  ['I', 'Cycle surface'],
                   ['T', 'Search shot types'],
                 ]],
               ] as [string, [string, string][]][]).map(([group, items]) => (

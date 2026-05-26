@@ -62,6 +62,18 @@ GRADIENTS: dict[str, list[tuple[int, int, int]]] = {
         (255, 210, 120),
         (255, 255, 240),
     ],
+    "naranja": [        # dark brown → deep orange (#FF6F00) → bright amber → white-yellow
+        (0,   20,  80),
+        (0,  111, 255),
+        (0,  200, 255),
+        (120, 230, 255),
+    ],
+    "red": [            # near-black → dark red → #F80000 → white-red
+        (0,   0,  50),
+        (0,   0, 160),
+        (0,   0, 248),
+        (180, 180, 255),
+    ],
 }
 DEFAULT_GRADIENT = "comet"
 
@@ -76,23 +88,44 @@ def lerp_color(t: float, gradient: list[tuple]) -> tuple[int, int, int]:
     return tuple(int(gradient[lo][c] * (1.0 - f) + gradient[hi][c] * f) for c in range(3))
 
 
-def load_labels_json(path: str) -> dict[int, tuple[float, float]]:
+def load_labels_json(path: str) -> tuple[dict[int, tuple[float, float]], set[int], float | None]:
     with open(path) as f:
         data = json.load(f)
+    label_fps = data.get("fps")
     result = {}
+    reset_frames: set[int] = set()
     for label in data.get("labels", []):
-        if label.get("visibility") == "visible":
-            result[int(label["frame"])] = (float(label["x"]), float(label["y"]))
-    return result
+        vis = label.get("visibility")
+        frame = int(label["frame"])
+        if vis == "visible":
+            result[frame] = (float(label["x"]), float(label["y"]))
+        elif vis == "out_of_frame":
+            reset_frames.add(frame)
+    return result, reset_frames, float(label_fps) if label_fps is not None else None
 
 
-def load_labels_csv(path: str) -> dict[int, tuple[float, float]]:
+def load_labels_csv(path: str) -> tuple[dict[int, tuple[float, float]], set[int], float | None]:
     result = {}
+    reset_frames: set[int] = set()
+    label_fps = None
     with open(path, newline="") as f:
-        for row in csv.DictReader(f):
-            if row.get("visibility") == "visible":
-                result[int(row["frame"])] = (float(row["x"]), float(row["y"]))
-    return result
+        for line in f:
+            if line.startswith("# fps:"):
+                try:
+                    label_fps = float(line.split(":", 1)[1].strip())
+                except ValueError:
+                    pass
+            if not line.startswith("#"):
+                break
+        f.seek(0)
+        for row in csv.DictReader(row for row in f if not row.startswith("#")):
+            vis = row.get("visibility")
+            frame = int(row["frame"])
+            if vis == "visible":
+                result[frame] = (float(row["x"]), float(row["y"]))
+            elif vis == "out_of_frame":
+                reset_frames.add(frame)
+    return result, reset_frames, label_fps
 
 
 def _gaussian_smooth_1d(arr: np.ndarray, sigma: float) -> np.ndarray:
@@ -197,9 +230,8 @@ def draw_trail(
     if show_head_circle:
         cv2.circle(overlay, (hx, hy), BALL_RADIUS + 3, head_color, -1, cv2.LINE_AA)
 
-    # Per-pixel alpha: brighter overlay pixels blend more strongly
-    gray = cv2.cvtColor(overlay, cv2.COLOR_BGR2GRAY)
-    alpha = (gray.astype(np.float32) / 255.0 * 0.92)[..., np.newaxis]
+    # Per-pixel alpha: use max channel so saturated colours (e.g. red) aren't dimmed by low luminance
+    alpha = (np.max(overlay, axis=2).astype(np.float32) / 255.0 * 0.92)[..., np.newaxis]
     blended = frame.astype(np.float32) * (1.0 - alpha) + overlay.astype(np.float32) * alpha
     np.copyto(frame, np.clip(blended, 0, 255).astype(np.uint8))
 
@@ -251,17 +283,10 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.labels.endswith(".json"):
-        labels = load_labels_json(args.labels)
+        labels, reset_frames, label_fps = load_labels_json(args.labels)
     else:
-        labels = load_labels_csv(args.labels)
-    print(f"Loaded {len(labels)} visible ball positions from {args.labels}")
-
-    if args.lerp:
-        labels = smooth_labels(labels, sigma=args.lerp_sigma, max_gap=args.lerp_max_gap)
-        print(f"  After lerp/smooth: {len(labels)} positions (sigma={args.lerp_sigma}, max_gap={args.lerp_max_gap})")
-
-    gradient = GRADIENTS[args.gradient]
-    print(f"Gradient: {args.gradient}  |  head circle: {not args.no_head_circle}  |  aureola: {not args.no_aureola}")
+        labels, reset_frames, label_fps = load_labels_csv(args.labels)
+    print(f"Loaded {len(labels)} visible ball positions from {args.labels} ({len(reset_frames)} out-of-frame resets)")
 
     cap = cv2.VideoCapture(args.video)
     if not cap.isOpened():
@@ -272,6 +297,19 @@ def main() -> None:
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f"Video: {width}x{height} @ {fps:.2f} fps — {total} frames")
+
+    if label_fps is not None and abs(label_fps - fps) > 0.5:
+        ratio = fps / label_fps
+        print(f"Label fps ({label_fps}) differs from video fps ({fps:.2f}) — remapping frames by ×{ratio:.4f}")
+        labels = {int(round(f * ratio)): pos for f, pos in labels.items()}
+        reset_frames = {int(round(f * ratio)) for f in reset_frames}
+
+    if args.lerp:
+        labels = smooth_labels(labels, sigma=args.lerp_sigma, max_gap=args.lerp_max_gap)
+        print(f"  After lerp/smooth: {len(labels)} positions (sigma={args.lerp_sigma}, max_gap={args.lerp_max_gap})")
+
+    gradient = GRADIENTS[args.gradient]
+    print(f"Gradient: {args.gradient}  |  head circle: {not args.no_head_circle}  |  aureola: {not args.no_aureola}")
 
     use_ffmpeg = shutil.which("ffmpeg") is not None
     if use_ffmpeg:
@@ -296,7 +334,9 @@ def main() -> None:
         if not ret:
             break
 
-        if frame_idx in labels:
+        if frame_idx in reset_frames:
+            trail.clear()
+        elif frame_idx in labels:
             trail.append(labels[frame_idx])
 
         if trail:
@@ -321,8 +361,12 @@ def main() -> None:
             [
                 "ffmpeg", "-y",
                 "-i", tmp_path,
+                "-i", args.video,
+                "-map", "0:v:0",
+                "-map", "1:a?",
                 "-c:v", "libx264", "-preset", "fast", "-crf", "18",
                 "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                "-c:a", "copy",
                 args.output,
             ],
             check=True,

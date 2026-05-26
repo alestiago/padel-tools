@@ -1,8 +1,12 @@
-export type PlayState = 'in_play' | 'dead'
-export type Visibility = 'visible' | 'occluded' | 'out_of_frame'
+export type PlayState = 'in_play' | 'dead' | 'unspecified'
+export type Visibility = 'visible' | 'motion_blur' | 'occluded' | 'out_of_frame' | 'unspecified'
 export type ImpactSurface = 'floor' | 'racket' | 'wall' | 'fence' | 'net'
 
 export const IMPACT_SURFACES: ImpactSurface[] = ['floor', 'racket', 'wall', 'fence', 'net']
+
+export const IMPACT_SHORTCUTS: Record<ImpactSurface, string> = {
+  floor: 'F', racket: 'R', wall: 'W', fence: 'E', net: 'N',
+}
 
 export type ShotType =
   | 'serve' | 'groundstroke' | 'high_volley' | 'medium_volley' | 'low_volley'
